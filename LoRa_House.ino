@@ -1,7 +1,11 @@
+#include <SSD1306.h>
+
+// LoRa libraries
 #include <SPI.h>
 #include <LoRa.h>
 #include "sha.h"
 
+// Networking libraries
 #include <WiFi.h>
 #include <ESPmDNS.h>
 
@@ -9,12 +13,12 @@
 #include <WebServer.h>
 #include <ArduinoJson.h>
 
+// System libraries
 #include <SPIFFS.h>
-
 #include <Update.h>
 
-#include "SSD1306.h"
-#include "images.h"
+//#include "SSD1306.h"
+//#include "images.h"
 
 #include "soc/rtc_wdt.h" // FreeRTOS WDT control for ESP32
 
