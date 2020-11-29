@@ -94,8 +94,10 @@ void displayBasic () {
     display.drawString(0, 0, "http://" + ip.toString() + "/");
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     //display.drawString(64, 10, "http://" + ssid + "-" + ID + ".local");
-    display.drawString(64, 10, ssid + "-" + ID);
-    display.drawString(64, 20, "p/w: " + password);
+    if (wifi_ap_mode) {
+      display.drawString(64, 10, ssid + "-" + ID);
+      display.drawString(64, 20, "p/w: " + password);
+    }
     display.setTextAlignment(TEXT_ALIGN_LEFT);
   }
   
