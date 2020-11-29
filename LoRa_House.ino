@@ -176,10 +176,12 @@ void receiveLoRaData(int packetSize) {
         getSignalInfo();
       }
     } else {
+      incrementDroppedPackets();
       displayMessage("Invalid checksum");
       getSignalInfo();
     }
   } else {
+    incrementDroppedPackets();
     displayMessage("Couldn't deserialize!");
     getSignalInfo();
   }
@@ -244,13 +246,29 @@ void incrementReboots () {
   String timeNow = "";
   timeNow += year(t);
   timeNow += "/";
-  timeNow += month(t);
+  int months = month(t);
+  if (months < 10) {
+    timeNow += "0";
+  }
+  timeNow += months;
   timeNow += "/";
-  timeNow += day(t);
+  int days = day(t);
+  if (days < 10) {
+    timeNow += "0";
+  }
+  timeNow += days;
   timeNow += " ";
-  timeNow += hour(t);
+  int hours = hour(t);
+  if (hours < 10) {
+    timeNow += "0";
+  }
+  timeNow += hours;
   timeNow += ":";
-  timeNow += minute(t);
+  int minutes = minute(t);
+  if (minutes < 10) {
+    timeNow += "0";
+  }
+  timeNow += minutes;
   timeNow += ":";
   int seconds = second(t);
   if (seconds < 10) {
@@ -259,6 +277,50 @@ void incrementReboots () {
   timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
   loggingFile.println("Rebooted at " + timeNow);
+  loggingFile.close();
+}
+
+void incrementDroppedPackets () {
+  time_t t = now();
+  String timeNow = "";
+  timeNow += year(t);
+  timeNow += "/";
+  int months = month(t);
+  if (months < 10) {
+    timeNow += "0";
+  }
+  timeNow += months;
+  timeNow += "/";
+  int days = day(t);
+  if (days < 10) {
+    timeNow += "0";
+  }
+  timeNow += days;
+  timeNow += " ";
+  int hours = hour(t);
+  if (hours < 10) {
+    timeNow += "0";
+  }
+  timeNow += hours;
+  timeNow += ":";
+  int minutes = minute(t);
+  if (minutes < 10) {
+    timeNow += "0";
+  }
+  timeNow += minutes;
+  timeNow += ":";
+  int seconds = second(t);
+  if (seconds < 10) {
+    timeNow += "0";
+  }
+  timeNow += seconds;
+  int seconds = second(t);
+  if (seconds < 10) {
+    timeNow += "0";
+  }
+  timeNow += seconds;
+  File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
+  loggingFile.println("Dropped packet at " + timeNow);
   loggingFile.close();
 }
 
@@ -683,12 +745,14 @@ void loop () {
       payloadReceived = "";
       counter = 1;
       droppedPackets = droppedPackets + 1;
+      incrementDroppedPackets();
       displayMessage("No response...");
     }
 
     // If it's been 10 seconds without a response, restart from the beginning and try again
     if (millis() - lastMillis > timeout) {
       payloadReceived = "";
+      incrementDroppedPackets();
       displayMessage("No connection!");
       lastMillis = millis() - interval;
       getSignalInfo();
