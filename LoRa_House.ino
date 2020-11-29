@@ -60,7 +60,7 @@ const int timeZone = 13; // UTC+13 (NZDT)
 
 // Various variables
 unsigned int lastMillis = 0;
-unsigned int interval = 5000;
+unsigned int interval = 6000;
 unsigned int timeout = 10000;
 unsigned long counter = 1;
 unsigned int droppedPackets = 0;
@@ -276,7 +276,7 @@ void incrementReboots () {
   }
   timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
-  loggingFile.println("Rebooted at " + timeNow);
+  loggingFile.println(timeNow + " : Rebooted");
   loggingFile.close();
 }
 
@@ -315,8 +315,13 @@ void incrementDroppedPackets () {
   }
   timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
-  loggingFile.println("Dropped packet at " + timeNow);
+  loggingFile.println(timeNow + " : Dropped packet");
   loggingFile.close();
+}
+
+void resetLogFile () {
+  SPIFFS.remove("/log.txt");
+  server.send(200, "text/plain", "Log cleared!");
 }
 
 /*-------- NTP code ----------*/
@@ -375,16 +380,16 @@ void sendNTPpacket (IPAddress &address) {
   Udp.endPacket();
 }
 
-// HTTP POST, the actual point of the unit(s)
+/*-- HTTP POST, the actual point of the unit(s) --*/
 void handleRoot () {
+  String index = "Hello world!<br><br><form action='/log'><input type='submit' value='View log'></form><form action='/clear'><input type='submit' value='Clear log'></form><form action='/restart'><input type='submit' value='Restart KeepHome'>";
+  server.send(200, "text/html", index); // Send HTTP status 200 (Ok) and send some HTML to the browser/client
+}
+
+void handleLog () {
   File loggingFile = SPIFFS.open("/log.txt", FILE_READ);
-  String logFile = "\n";
-  while (loggingFile.available()) {
-    logFile += char(loggingFile.read());
-  }
+  server.streamFile(loggingFile, "text/plain");
   loggingFile.close();
-  
-  server.send(200, "text/plain", "Hello world!    Log:" + logFile); // Send HTTP status 200 (Ok) and send some text to the browser/client
 }
 
 void handlePost () {
@@ -464,6 +469,13 @@ void gotIP () {
   displayWiFi();
 
   server.on("/", handleRoot); // Call the 'handleRoot' function when a client requests URI "/"
+  server.on("/log", handleLog);
+  server.on("/clear", resetLogFile);
+  server.on("/restart", [] () {
+    server.send(200, "text/plain", "Restarting...");
+    vTaskDelay(1000);
+    ESP.restart();
+  });
   server.on("/post", HTTP_POST, handlePost); // Call the 'handlePost' function when a client sends a POST request to URI "/post"
   server.on("/updateRemote", enableRemoteUpgrade);
   server.on("/upload", HTTP_GET, [] () {
@@ -496,7 +508,7 @@ void gotIP () {
         Update.printError(Serial);
       }
     } else {
-      //Serial.printf("Update Failed Unexpectedly (likely broken connection): status=%d\n", upload.status);
+      Serial.printf("Update Failed Unexpectedly (likely broken connection): status=%d\n", upload.status);
     }
   });
 
@@ -533,12 +545,6 @@ void displayInit() {
   display.flipScreenVertically();
   display.setFont(ArialMT_Plain_10);
 }
-
-/*
-void loop () {
-  vTaskDelay(10); // ESP32 default 100Hz tick rate, so 10ms delay allows for 1 tick in order to run background tasks
-  Serial.println(millis());
-}*/
 
 
 void setup () {
@@ -739,9 +745,10 @@ void loop () {
     if (millis() - lastMillis > interval) {
       payloadReceived = "";
       counter = 1;
-      droppedPackets = droppedPackets + 1;
-      incrementDroppedPackets();
+      //droppedPackets = droppedPackets + 1;
+      //incrementDroppedPackets();
       displayMessage("No response...");
+      //lastMillis = lastMillis + interval;
     }
 
     // If it's been 10 seconds without a response, restart from the beginning and try again
