@@ -314,11 +314,6 @@ void incrementDroppedPackets () {
     timeNow += "0";
   }
   timeNow += seconds;
-  int seconds = second(t);
-  if (seconds < 10) {
-    timeNow += "0";
-  }
-  timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
   loggingFile.println("Dropped packet at " + timeNow);
   loggingFile.close();
