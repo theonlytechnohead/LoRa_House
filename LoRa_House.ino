@@ -276,7 +276,7 @@ void incrementReboots () {
   }
   timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
-  loggingFile.println(timeNow + " : Rebooted");
+  loggingFile.println("[" + timeNow + "] Rebooted");
   loggingFile.close();
 }
 
@@ -315,7 +315,7 @@ void incrementDroppedPackets () {
   }
   timeNow += seconds;
   File loggingFile = SPIFFS.open("/log.txt", FILE_APPEND);
-  loggingFile.println(timeNow + " : Dropped packet");
+  loggingFile.println("[" + timeNow + "] Dropped packet");
   loggingFile.close();
 }
 
