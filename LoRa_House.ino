@@ -64,7 +64,7 @@ const int timeZone = 13; // UTC+13 (NZDT)
 
 // Various variables
 unsigned int lastMillis = 0;
-unsigned int interval = 6000;
+unsigned int interval = 12000;
 unsigned int timeout = 10000;
 unsigned long counter = 1;
 unsigned int droppedPackets = 0;
@@ -716,7 +716,6 @@ void setup () {
   lastMillis = millis();
   if (lora) {
     displayPayload();
-    getSignalInfo();
   }
 }
 
@@ -746,22 +745,17 @@ void loop () {
       receiveLoRaData(packetSize);
     }
 
-    if (millis() - lastMillis > interval) {
-      payloadReceived = "";
-      counter = 1;
-      //droppedPackets = droppedPackets + 1;
-      //incrementDroppedPackets();
-      displayMessage("No response...");
-      //lastMillis = lastMillis + interval;
+    if (millis() - lastMillis > interval && millis() - lastMillis < interval + timeout) {
+      displayMessage("KeepBox missed check-in...");
     }
 
-    // If it's been 10 seconds without a response, restart from the beginning and try again
-    if (millis() - lastMillis > timeout) {
+    if (millis() - lastMillis > interval + timeout) {
       payloadReceived = "";
-      incrementDroppedPackets();
-      displayMessage("No connection!");
-      lastMillis = millis() - interval;
-      getSignalInfo();
+      counter = 1;
+      if (counter > 1) {
+        incrementDroppedPackets();
+      }
+      displayMessage("Uh oh, no connecto!");
     }
   }
 }
