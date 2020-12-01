@@ -8,6 +8,7 @@
 // Networking libraries
 #include <WiFi.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 
 #include "TimeLib.h"
 #include <WebServer.h>
@@ -52,6 +53,7 @@ String ID;
 String ssid = DEFAULT_SSID;
 String password = DEFAULT_PASSWORD;
 WebServer server(80);
+DNSServer dnsServer;
 const char* uploadPage = "<form method='POST' action='/update' enctype='multipart/form-data'> <input type='file' name='update'> <input type='submit' value='Update KeepHome'> </form> <br> <form method='GET' action='/updateRemote' enctype='multipart/form-data'> <input type='submit' value='Prepare KeepBox for update'> </form>";
 IPAddress ip;
 
@@ -244,6 +246,20 @@ void enableRemoteUpgrade () {
   lora = true;
 }
 
+void restartKeepHome () {
+  MDNS.end();
+  wifi = false;
+  lora = false;
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0, 0, "Restarting now...");
+  display.display();
+  vTaskDelay(1500);
+  display.clear();
+  vTaskDelay(100);
+  ESP.restart();
+}
+
 // Long-term logging functions
 void incrementReboots () {
   time_t t = now();
@@ -336,18 +352,19 @@ time_t getNtpTime () {
   IPAddress ntpServerIP; // NTP server's ip address
 
   while (Udp.parsePacket() > 0) ; // discard any previously received packets
-  Serial.println("Transmit NTP Request");
+  Serial.print("Transmit NTP request to ");
   // get a random server from the pool
   WiFi.hostByName(ntpServerName, ntpServerIP);
   Serial.print(ntpServerName);
-  Serial.print(": ");
-  Serial.println(ntpServerIP);
+  Serial.print(" (");
+  Serial.print(ntpServerIP);
+  Serial.println(")");
   sendNTPpacket(ntpServerIP);
   uint32_t beginWait = millis();
   while (millis() - beginWait < 1500) {
     int size = Udp.parsePacket();
     if (size >= NTP_PACKET_SIZE) {
-      Serial.println("Receive NTP Response");
+      Serial.println("Received NTP response (time sync'd)");
       Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
       unsigned long secsSince1900;
       // convert four bytes starting at location 40 to a long integer
@@ -358,7 +375,7 @@ time_t getNtpTime () {
       return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
     }
   }
-  Serial.println("No NTP Response :-(");
+  Serial.println("No NTP response");
   return 0; // return 0 if unable to get the time
 }
 
@@ -454,15 +471,21 @@ void handlePost () {
 }
 
 void setupMDNS (WiFiEvent_t event, WiFiEventInfo_t info) {
-  String hostname = DEFAULT_SSID + ID;
+  //String hostname = DEFAULT_SSID + ID;
   ip = WiFi.localIP();
-  MDNS.begin(hostname.c_str());
+  //dnsServer.start(53, "*", ip);
+  if (MDNS.begin(KEEPHOME))
+    Serial.printf("MDNS responder started: %s.local\n", KEEPHOME);
   MDNS.addService("_http", "_tcp", 80);
   gotIP();
 }
 
 void setSoftAPIP () {
   ip = WiFi.softAPIP();
+  dnsServer.start(53, "*", ip);
+  if (MDNS.begin(KEEPHOME))
+    Serial.printf("MDNS responder started: %s.local\n", KEEPHOME);
+  MDNS.addService("_http", "_tcp", 80);
   gotIP();
 }
 
@@ -475,11 +498,7 @@ void gotIP () {
   server.on("/", handleRoot); // Call the 'handleRoot' function when a client requests URI "/"
   server.on("/log", handleLog);
   server.on("/clear", resetLogFile);
-  server.on("/restart", [] () {
-    server.send(200, "text/plain", "Restarting...");
-    vTaskDelay(1000);
-    ESP.restart();
-  });
+  server.on("/restart", restartKeepHome);
   server.on("/post", HTTP_POST, handlePost); // Call the 'handlePost' function when a client sends a POST request to URI "/post"
   server.on("/updateRemote", enableRemoteUpgrade);
   server.on("/upload", HTTP_GET, [] () {
@@ -525,13 +544,13 @@ void gotIP () {
 
 void setupWiFi () {
   WiFi.onEvent(setupMDNS, WiFiEvent_t::SYSTEM_EVENT_STA_GOT_IP);
-  //String temp = ssid + ID;
   WiFi.begin(ssid.c_str(), password.c_str());
 }
 
 // WiFi connection and setup
 void setupSoftAP () {
   String temp = ssid + "-" + ID;
+  WiFi.mode(WIFI_AP);
   WiFi.softAP(temp.c_str(), password.c_str());
   setSoftAPIP();
 }
@@ -731,12 +750,7 @@ void loop () {
     wifi = false;
     vTaskDelay(50);
     SPIFFS.format();
-    display.clear();
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(0, 0, "Reset complete!\nRestarting now...");
-    display.display();
-    vTaskDelay(1000);
-    ESP.restart();
+    restartKeepHome();
   }
   if (lora) {
     // Try to receive a packet
