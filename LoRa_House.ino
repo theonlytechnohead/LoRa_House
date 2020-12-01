@@ -69,6 +69,7 @@ const int timeZone = 13; // UTC+13 (NZDT)
 unsigned int lastMillis = 0;
 unsigned int interval = 12000;
 unsigned int timeout = 10000;
+String nextCommand = getSignalInfoCommand;
 unsigned long counter = 1;
 unsigned int droppedPackets = 0;
 
@@ -178,10 +179,13 @@ void receiveLoRaData(int packetSize) {
 
     if (checksum == calc) {
       counter++;
-      if (command == getSignalInfoCommand) {
+      if (nextCommand == getSignalInfoCommand) {
         displayMessage(payloadReceived);
         getSignalInfo();
-      }
+      } else if (nextCommand == getRawDataCommand) {
+        displayMessage(payloadReceived);
+        getRawData();
+      } // Maybe do callback here to change nextCommand again?
     } else {
       incrementDroppedPackets();
       displayMessage("Invalid checksum");
@@ -211,6 +215,7 @@ void sendLoraJson (DynamicJsonDocument doc) {
   LoRa.receive();
 
   digitalWrite(2, LOW);
+  nextCommand = getSignalInfoCommand;
 }
 
 void getSignalInfo () {
@@ -439,7 +444,7 @@ void handlePost () {
   if (server.hasArg("keepbox")) {
     if (server.arg("keepbox") == "getdata") {
       // assuming 'GET_DATA_RAW' for now...
-      getRawData();
+      nextCommand = getRawDataCommand;
     }
   }
   if (server.hasArg("WiFimode")) {
