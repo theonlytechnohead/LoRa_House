@@ -418,7 +418,7 @@ void handlePost () {
   DynamicJsonDocument doc(1024); // Space for 1kb of JSON data in the heap
 
   doc["time"] = millis() / 1000;
-  doc["additional"] = "RSSI: " + rssi;
+  doc["additional"] = "RSSI: " + String(rssi);
   
   String data = server.arg("plain"); // Get the plain text from the post request (all the data)
   if (server.hasArg("keepbox")) {
