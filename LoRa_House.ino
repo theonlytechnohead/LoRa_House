@@ -45,6 +45,7 @@ bool wifi = true;
 bool wifi_ap_mode;
 
 // Constants
+const char* getRawDataCommand = "GET_DATA_RAW";
 const char* getSignalInfoCommand = "GET_SIGNAL_INFO";
 const char* updateReadyCommand = "READY_UPDATE";
 
@@ -215,12 +216,26 @@ void sendLoraJson (DynamicJsonDocument doc) {
 void getSignalInfo () {
   DynamicJsonDocument doc(1024);
 
-  String payload = String(millis() / 1000) + " hello: " + counter; // BE CAREFUL YOU IDIOT
+  String payload = String(millis() / 1000) + " hello: " + String(counter); // BE CAREFUL YOU IDIOT
   
   String checksum = SHA256(payload);
 
   doc["checksum"] = checksum;
   doc["command"] = getSignalInfoCommand;
+  doc["payload"] = payload;
+
+  sendLoraJson(doc);
+}
+
+void getRawData () {
+  DynamicJsonDocument doc(1024);
+
+  String payload = "Requesting raw data...";
+  
+  String checksum = SHA256(payload);
+
+  doc["checksum"] = checksum;
+  doc["command"] = getRawDataCommand;
   doc["payload"] = payload;
 
   sendLoraJson(doc);
@@ -423,7 +438,8 @@ void handlePost () {
   String data = server.arg("plain"); // Get the plain text from the post request (all the data)
   if (server.hasArg("keepbox")) {
     if (server.arg("keepbox") == "getdata") {
-      // handle stuffs (l8r...)
+      // assuming 'GET_DATA_RAW' for now...
+      getRawData();
     }
   }
   if (server.hasArg("WiFimode")) {
