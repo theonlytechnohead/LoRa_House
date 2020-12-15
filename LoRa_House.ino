@@ -67,8 +67,9 @@ const int timeZone = 13; // UTC+13 (NZDT)
 
 // Various variables
 unsigned int lastMillis = 0;
-unsigned int interval = 12000;
+unsigned int interval = 8000;
 unsigned int timeout = 10000;
+bool waiting = false;
 String nextCommand = getSignalInfoCommand;
 unsigned long counter = 1;
 unsigned int droppedPackets = 0;
@@ -99,20 +100,21 @@ void displayBasic () {
   if (updating) {
     display.drawString(0, 0, "Applying update...");
   } else if (wifi) {
-    display.drawString(0, 0, "http://" + ip.toString() + "/");
+    display.drawString(0, 0, "http://" + String(KEEPHOME) + "/");
     display.setTextAlignment(TEXT_ALIGN_CENTER);
-    //display.drawString(64, 10, "http://" + ssid + "-" + ID + ".local");
     if (wifi_ap_mode) {
       display.drawString(64, 10, ssid + "-" + ID);
       display.drawString(64, 20, "p/w: " + password);
     }
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
   }
-  
+
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);
   if (lora) {
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    //display.drawString(64, 10, "Sending packets"); 
+    display.drawString(128, 0, "O");
+  } else {
+    display.drawString(128, 0, "X");
   }
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
 }
 
 // Displays LoRa data
@@ -120,7 +122,7 @@ void displayPayload () {
   displayBasic();
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   if (lora) {
-    display.drawString(0 , 25, payloadReceived);
+    display.drawString(0, 25, payloadReceived);
   }
 
   display.display();
@@ -130,7 +132,7 @@ void displayMessage (String message) {
   displayBasic();
 
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64 , 35, message.c_str());
+  display.drawString(64 , 50, message.c_str());
 
   display.display();
 }
@@ -140,12 +142,12 @@ void displayWiFi () {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
 
-  //display.drawString(0, 0, "http:// " + ip.toString() + " /");
-  display.drawString(0, 0, "http:// " + ssid + "-" + ID + ".local /");
-  
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 15, ssid + "-" + ID);
-  display.drawString(64, 30, "p/w: " + password);
+  if (wifi_ap_mode) {
+    display.drawString(64, 0, "http://" + String(KEEPHOME) + ".local");
+    display.drawString(64, 10, ssid + "-" + ID);
+    display.drawString(64, 20, "p/w: " + password);
+  }
 
   display.display();
 }
@@ -153,6 +155,8 @@ void displayWiFi () {
 
 // Callback for LoRa received
 void receiveLoRaData(int packetSize) {
+  lastMillis = millis();
+  waiting = false;
   payloadReceived = "";
   String packet;
   packSize = String(packetSize, DEC);
@@ -162,7 +166,6 @@ void receiveLoRaData(int packetSize) {
   rssi = LoRa.packetRssi();
   //auto rssi = "RSSI: " + String(LoRa.packetRssi(), DEC);
   //auto snr = "SNR: " + String(LoRa.packetSnr(), 1);
-  lastMillis = millis();
   
   DynamicJsonDocument doc(2048);
 
@@ -179,13 +182,7 @@ void receiveLoRaData(int packetSize) {
 
     if (checksum == calc) {
       counter++;
-      if (nextCommand == getSignalInfoCommand) {
-        displayMessage(payloadReceived);
-        getSignalInfo();
-      } else if (nextCommand == getRawDataCommand) {
-        displayMessage(payloadReceived);
-        getRawData();
-      } // Maybe do callback here to change nextCommand again?
+      displayPayload();
     } else {
       incrementDroppedPackets();
       displayMessage("Invalid checksum");
@@ -200,12 +197,12 @@ void receiveLoRaData(int packetSize) {
 
 // Send a JSON document over LoRa
 void sendLoraJson (DynamicJsonDocument doc) {
+  waiting = false;
   LoRa.idle();
   digitalWrite(2, HIGH);
 
   char output[measureJson(doc) + 1];
   serializeJson(doc, output, sizeof(output));
-  //Serial.println(output);
 
   // send packet
   LoRa.beginPacket();
@@ -514,7 +511,7 @@ void setSoftAPIP () {
 void gotIP () {
   String hostname = DEFAULT_SSID + ID;
 
-  displayWiFi();
+  //displayWiFi();
 
   server.on("/", handleRoot); // Call the 'handleRoot' function when a client requests URI "/"
   server.on("/log", handleLog);
@@ -533,19 +530,23 @@ void gotIP () {
     ESP.restart();
   }, []() {
     lora = false;
+    LoRa.idle();
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
+      displayBasic();
       if (!Update.begin()) {
         //start with max available size
         Update.printError(Serial);
       }
     }
     else if (upload.status == UPLOAD_FILE_WRITE) {
+      displayBasic();
       if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
         //Update.printError(Serial);
       }
     }
     else if (upload.status == UPLOAD_FILE_END) {
+      displayBasic();
       if (Update.end(true)) {
         //true to set the size to the current progress
       } else {
@@ -561,6 +562,7 @@ void gotIP () {
   vTaskDelay(5000);
   displayPayload();
   lora = true;
+  lastMillis = millis();
 }
 
 void setupWiFi () {
@@ -577,13 +579,13 @@ void setupSoftAP () {
 }
 
 void displayInit() {
-  pinMode(2, OUTPUT);
-  pinMode(16, OUTPUT);
-  digitalWrite(16, LOW);    // set GPIO16 low to reset OLED
+  pinMode(2, OUTPUT);  // LED
+  pinMode(16, OUTPUT);  // OLED RST
+  digitalWrite(16, LOW);  // set GPIO16 low to reset OLED
   vTaskDelay(50);
-  digitalWrite(16, HIGH); // while OLED is running, must set GPIO16 in high、
+  digitalWrite(16, HIGH);  // while OLED is running, must set GPIO16 in high、
 
-  vTaskDelay(500);
+  vTaskDelay(100);
 
   display.init();
   display.flipScreenVertically();
@@ -597,18 +599,7 @@ void setup () {
 
   randomSeed(analogRead(34)); // Random unconnected pin
 
-  // OLED, LED
-  pinMode(16, OUTPUT); // OLED RST
-  pinMode(2, OUTPUT); // LED
-
-  digitalWrite(16, LOW);    // set GPIO16 low to reset OLED
-  vTaskDelay(50);
-  digitalWrite(16, HIGH); // while OLED is running, must set GPIO16 in high
-
-  // Initialize OLED display
-  display.init();
-  display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_10);
+  displayInit();
   display.drawString(0, 0, "Booting...");
   display.display();
 
@@ -620,7 +611,7 @@ void setup () {
     display.clear();
     display.drawString(0, 0, "SPIFFS borked");
     display.display();
-    vTaskDelay(1000);
+    vTaskDelay(500);
   } else {
     if (SPIFFS.exists("/id.txt")) {
       File idFile = SPIFFS.open("/id.txt", "r");
@@ -690,7 +681,7 @@ void setup () {
       passwordFile.close();
     }
     if (wifi_ap_mode) {
-      setupSoftAP(); // Problem here!!! or hereafter
+      setupSoftAP();
     } else {
       setupWiFi();
     }
@@ -745,26 +736,23 @@ void setup () {
       0); // Core where the task should run, code runs on core 1 by default
   
   // Wait until everything is ready, then send first packet
-  vTaskDelay(500);
+  vTaskDelay(100);
 
   // NTP
   Udp.begin(localPort);
   setSyncProvider(getNtpTime);
   setSyncInterval(300); // Seconds between re-sync
   incrementReboots();
-  
-  lastMillis = millis();
-  if (lora) {
-    displayPayload();
-  }
+
+  displayMessage("Boot completed");
 }
 
 void loop () {
   vTaskDelay(10); // ESP32 default 100Hz tick rate, so 10ms delay allows for 1 tick in order to run background tasks
   if (!digitalRead(0) && !updating) {
     display.clear();
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(0, 0, "Resetting KeepHome...");
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(64, 32, "Resetting KeepHome...");
     display.display();
     vTaskDelay(50);
     lora = false;
@@ -780,17 +768,24 @@ void loop () {
       receiveLoRaData(packetSize);
     }
 
-    if (millis() - lastMillis > interval && millis() - lastMillis < interval + timeout) {
-      displayMessage("KeepBox missed check-in...");
+    if (millis() - lastMillis > interval && !waiting) {
+      //displayMessage("KeepBox missed check-in...");
+      if (nextCommand == getSignalInfoCommand) {
+        getSignalInfo();
+      } else if (nextCommand == getRawDataCommand) {
+        getRawData();
+      }
+      waiting = true;
     }
 
-    if (millis() - lastMillis > interval + timeout) {
+    if (millis() - lastMillis > interval + timeout && waiting) {
       payloadReceived = "";
       counter = 1;
       if (counter > 1) {
         incrementDroppedPackets();
       }
       displayMessage("Uh oh, no connecto!");
+      waiting = false;
     }
   }
 }
